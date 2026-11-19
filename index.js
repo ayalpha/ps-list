@@ -80,6 +80,40 @@ const extractExecutablePath = commandLine => {
 	return '';
 };
 
+// Split a `/proc/{pid}/cmdline` payload into its argument vector, excluding `argv[0]`
+export const parseCmdline = cmdline => {
+	// The file is NUL-delimited and ends with a trailing NUL; an empty file means a kernel thread
+	if (cmdline === '') {
+		return [];
+	}
+
+	const arguments_ = cmdline.split('\0');
+	// Drop the empty string produced by the trailing NUL
+	if (arguments_.at(-1) === '') {
+		arguments_.pop();
+	}
+
+	// `argv[0]` is the command itself; the caller already reports it as `name`/`path`
+	return arguments_.slice(1);
+};
+
+// Read the argument vector from procfs on Linux
+const readProcessArguments = (operatingSystemPlatform, processId) => {
+	if (operatingSystemPlatform !== 'linux' || !processId) {
+		return undefined;
+	}
+
+	let cmdline;
+	try {
+		cmdline = fs.readFileSync(`/proc/${processId}/cmdline`, 'utf8');
+	} catch {
+		// Process exited, or procfs is unavailable in this environment
+		return undefined;
+	}
+
+	return parseCmdline(cmdline);
+};
+
 // Resolve executable path - simple approach
 const resolveExecutablePath = (operatingSystemPlatform, processId, commandLine) => {
 	// On Linux, try /proc/{pid}/exe first for accurate path
@@ -139,6 +173,7 @@ const parseProcessFields = ({processId, parentProcessId, userId, cpuUsage, memor
 		memory: parsedMemoryUsagePercentage,
 		name: derivedProcessName,
 		path: resolvedExecutablePath,
+		args: readProcessArguments(process.platform, parsedProcessId),
 		startTime: makeStartTime(startTimeString),
 		cmd: command || '',
 	};
