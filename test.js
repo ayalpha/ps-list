@@ -3,7 +3,7 @@ import path from 'node:path';
 import {once} from 'node:events';
 import childProcess from 'node:child_process';
 import test from 'ava';
-import psList from './index.js';
+import psList, {parseCmdline} from './index.js';
 
 const isWindows = process.platform === 'win32';
 const nodeBinaryName = isWindows ? 'node.exe' : 'node';
@@ -49,6 +49,46 @@ test('main', async t => {
 			list.every(x => x.memory >= 0 && x.memory <= 100),
 			'Memory percentages should be valid',
 		);
+	}
+});
+
+test('parseCmdline', t => {
+	// Arguments that the formatted `ps` output cannot represent faithfully
+	t.deepEqual(
+		parseCmdline('/usr/bin/node\0script.js\0two words\0"quoted"\0\0\0'),
+		['script.js', 'two words', '"quoted"', '', ''],
+	);
+
+	// No arguments
+	t.deepEqual(parseCmdline('/usr/bin/node\0'), []);
+	// Kernel threads expose an empty file
+	t.deepEqual(parseCmdline(''), []);
+	// A lone NUL is a command with no arguments
+	t.deepEqual(parseCmdline('\0'), []);
+	// An unterminated payload still yields every argument
+	t.deepEqual(parseCmdline('/bin/cat\0a\0b'), ['a', 'b']);
+});
+
+test('arguments are split from the command', async t => {
+	if (process.platform !== 'linux') {
+		t.pass('Arguments test requires procfs and is skipped off Linux');
+		return;
+	}
+
+	// A space, a literal quote, an empty string, and a trailing empty string: none of these
+	// survive the formatted `ps` output intact, so this is the whole point of the field.
+	const arguments_ = ['./fixtures/sleep-forever.js', 'two words', '"quoted"', '', ''];
+	const sleepForever = childProcess.spawn(nodeBinaryName, arguments_, {argv0: 'ps-list-test'});
+
+	try {
+		const list = await psList();
+		const record = list.find(process_ => process_.pid === sleepForever.pid);
+
+		t.truthy(record, 'Should find the spawned process');
+		t.deepEqual(record.args, ['two words', '"quoted"', '', '']);
+	} finally {
+		sleepForever.kill(9);
+		await once(sleepForever, 'exit');
 	}
 });
 

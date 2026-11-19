@@ -22,6 +22,17 @@ export type ProcessDescriptor = {
 	readonly cmd?: string;
 
 	/**
+	The arguments the process was started with, excluding the command itself.
+
+	Read from procfs, so an argument containing a space stays a single entry and empty arguments are preserved. Reflects what the process exposes when it is read, so a process that rewrites its own arguments reports the rewritten ones. `undefined` when the process cannot be read, and `[]` for a kernel thread.
+
+	Only available on Linux.
+
+	Not supported on Windows or macOS.
+	*/
+	readonly args?: string[];
+
+	/**
 	CPU usage as a percentage (0-100).
 
 	Not supported on Windows.
@@ -74,3 +85,10 @@ console.log(await psList());
 ```
 */
 export default function psList(options?: Options): Promise<ProcessDescriptor[]>;
+
+/**
+Split a `/proc/{pid}/cmdline` payload into its argument vector, excluding `argv[0]`.
+
+@param cmdline - The raw, NUL-delimited file contents.
+*/
+export function parseCmdline(cmdline: string): string[];

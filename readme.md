@@ -35,8 +35,9 @@ On macOS and Linux:
   - On macOS: extracted from command line when possible
   - Falls back to `comm` (which may be truncated)
 - The `startTime` property contains the process start time as a Date object
+- On Linux, the `args` property contains the arguments the process was started with, read from `/proc/{pid}/cmdline`. Unlike `cmd`, an argument containing a space stays a single entry and empty arguments are preserved. It is `undefined` when the process cannot be read and `[]` for a kernel thread
 
-The `cmd`, `cpu`, `memory`, `uid`, `path`, and `startTime` properties are not available on Windows.
+The `cmd`, `cpu`, `memory`, `uid`, `path`, and `startTime` properties are not available on Windows. The `args` property is only available on Linux.
 
 #### options
 
